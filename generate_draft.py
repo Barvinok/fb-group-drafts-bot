@@ -86,6 +86,12 @@ def month_index(dt: datetime.date, length: int) -> int:
     return (dt.year * 12 + dt.month) % length
 
 
+def next_monday(d: datetime.date) -> datetime.date:
+    """Returns d itself if it's already Monday, otherwise the upcoming Monday."""
+    days_ahead = (7 - d.weekday()) % 7
+    return d + datetime.timedelta(days=days_ahead)
+
+
 def is_last_day_of_month(dt: datetime.date) -> bool:
     return (dt + datetime.timedelta(days=1)).month != dt.month
 
@@ -110,6 +116,17 @@ def decide_post_type(dt: datetime.date) -> str | None:
         return "win_of_week"
 
     return None  # no post scheduled today
+
+
+def extract_text(resp) -> str:
+    """
+    resp.content can include non-text blocks (e.g. ThinkingBlock for
+    extended thinking, or tool-use blocks) before the actual text block.
+    Pull out and join only the text blocks.
+    """
+    return "\n".join(
+        block.text for block in resp.content if getattr(block, "type", None) == "text"
+    )
 
 
 def build_base_text(post_type: str, dt: datetime.date) -> str:
@@ -170,17 +187,15 @@ Return ONLY the finished post text, nothing else (no preamble, no "Here's a draf
 
     resp = client.messages.create(
         model=ANTHROPIC_MODEL,
-        max_tokens=900,
+        max_tokens=1500,
         tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}],
         messages=[{"role": "user", "content": prompt}],
     )
 
-    text_parts = []
     source_url = ""
 
     for block in resp.content:
         if block.type == "text":
-            text_parts.append(block.text)
             for citation in (getattr(block, "citations", None) or []):
                 url = getattr(citation, "url", None)
                 if url and not source_url:
@@ -195,7 +210,12 @@ Return ONLY the finished post text, nothing else (no preamble, no "Here's a draf
                     source_url = url
                     break
 
-    draft_text = "\n".join(p for p in text_parts if p).strip()
+    draft_text = extract_text(resp).strip()
+
+    if not draft_text:
+        print(f"WARNING: empty response for 'ai_hot_take' (stop_reason={resp.stop_reason}).")
+        draft_text = "[Generation failed — re-run manually or check API logs for this row.]"
+
     return draft_text, source_url
 
 
@@ -220,10 +240,19 @@ TEMPLATE:
 
     resp = client.messages.create(
         model=ANTHROPIC_MODEL,
-        max_tokens=500,
+        max_tokens=1500,
         messages=[{"role": "user", "content": prompt}],
     )
-    return resp.content[0].text.strip()
+    text = extract_text(resp).strip()
+
+    if not text:
+        # Safety net: never leave a row blank. Falls back to the fixed
+        # template as-is so you still get a usable draft, and flags it
+        # in the console so you notice the model produced no text output.
+        print(f"WARNING: empty response for '{post_type}' (stop_reason={resp.stop_reason}); using base template.")
+        return base_text
+
+    return text
 
 
 def main():
@@ -231,27 +260,39 @@ def main():
     client = Anthropic(api_key=api_key)
 
     today = datetime.date.today()
-    post_type = decide_post_type(today)
+    week_start = next_monday(today)
 
-    if post_type is None:
-        print(f"{today}: no post scheduled today.")
-        return
+    generated_any = False
 
-    if post_type == "ai_hot_take":
-        draft_text, source_url = generate_hot_take(client)
-    else:
-        base_text = build_base_text(post_type, today)
-        draft_text = freshen_with_claude(client, post_type, base_text)
-        source_url = ""
+    for offset in range(7):  # covers Mon-Sun in case a monthly post lands on a weekend
+        day = week_start + datetime.timedelta(days=offset)
+        post_type = decide_post_type(day)
 
-    append_draft(
-        date=today.isoformat(),
-        post_type=post_type,
-        draft_text=draft_text,
-        status="Ready",
-        link=source_url,
-    )
-    print(f"{today}: generated '{post_type}' draft and logged to Sheet.")
+        if post_type is None:
+            continue
+
+        if post_type == "ai_hot_take":
+            draft_text, source_url = generate_hot_take(client)
+        else:
+            base_text = build_base_text(post_type, day)
+            draft_text = freshen_with_claude(client, post_type, base_text)
+            source_url = ""
+
+        recommended_day = day.strftime("%A (%Y-%m-%d)")
+
+        append_draft(
+            date=today.isoformat(),
+            post_type=post_type,
+            draft_text=draft_text,
+            status="Ready",
+            link=source_url,
+            recommended_day=recommended_day,
+        )
+        print(f"Generated '{post_type}' for {recommended_day}.")
+        generated_any = True
+
+    if not generated_any:
+        print(f"Week of {week_start}: no posts scheduled.")
 
 
 if __name__ == "__main__":

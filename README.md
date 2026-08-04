@@ -1,12 +1,17 @@
 # FB Group Post Draft Generator
 
-Auto-generates the week's recurring post drafts for your Facebook group and
-logs them to a Google Sheet. You copy-paste the "Ready" drafts into
-Facebook's **native post scheduler** (Group admin tools → create post →
-schedule icon). Facebook does not allow apps to publish to Groups via API,
-so this tool intentionally stops one step before publishing.
+Auto-generates the week's recurring post drafts for your Facebook group in
+one batch and logs them to a Google Sheet, with a **Recommended Day**
+column so you know when to schedule each one. You copy-paste the "Ready"
+drafts into Facebook's **native post scheduler** (Group admin tools →
+create post → schedule icon). Facebook does not allow apps to publish to
+Groups via API, so this tool intentionally stops one step before
+publishing.
 
-## Schedule (default — edit `decide_post_type()` in generate_draft.py to change)
+## Schedule
+
+Runs once a week (Sundays, via GitHub Actions) and generates every post
+due in the coming Monday–Sunday in a single run:
 
 | Day | Post type |
 |---|---|
@@ -19,7 +24,11 @@ so this tool intentionally stops one step before publishing.
 
 ## Sheet columns
 
-`Date | Post Type | Draft Text | Status | Links`
+`Date | Post Type | Draft Text | Status | Links | Recommended Day`
+
+**Date** is when the row was generated (i.e. the Sunday the script ran).
+**Recommended Day** is when to actually post it (e.g. `Wednesday
+(2026-08-12)`) — sort or filter by this column to plan your week.
 
 The **Links** column is only populated for `ai_hot_take` posts (the source
 article Claude based the post on). Worth a quick skim before posting —
@@ -33,7 +42,7 @@ provocative post against its source before publishing.
    Instagram scheduler (`sheets.py` there references `GOOGLE_SHEETS_CREDENTIALS_JSON`).
    Copy its ID into `SPREADSHEET_ID`.
 2. **GitHub repo**: create a new repo (or a `fb-group-scheduler/` folder in
-   an existing one), add these files, put `daily_draft.yml` under
+   an existing one), add these files, put `weekly_drafts.yml` under
    `.github/workflows/`.
 3. **Secrets**: in the repo's Settings → Secrets and variables → Actions,
    add `ANTHROPIC_API_KEY`, `GOOGLE_SHEETS_CREDENTIALS_JSON`, `SPREADSHEET_ID`.
@@ -50,9 +59,10 @@ provocative post against its source before publishing.
 
 ## Weekly routine for you
 
-Open the Sheet once a week (e.g. Sunday night), review the drafts, and
-schedule them in Facebook for the coming week. Takes a few minutes instead
-of writing from scratch.
+The Action runs Sunday morning and drops the whole week's drafts into the
+Sheet at once. Open it any time after that, review, and schedule everything
+for the week in Facebook's native scheduler — sorted by **Recommended Day**.
+
 
 ## Notes
 

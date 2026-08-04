@@ -1,0 +1,29 @@
+name: Generate FB Group Post Drafts (Weekly)
+
+on:
+  schedule:
+    # Sundays 08:00 UTC — generates all of the upcoming week's posts in one run.
+    - cron: "0 8 * * 0"
+  workflow_dispatch: {}  # lets you trigger it manually from the Actions tab
+
+jobs:
+  generate-drafts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate this week's drafts
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+        run: python generate_draft.py
