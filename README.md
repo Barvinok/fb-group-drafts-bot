@@ -12,10 +12,19 @@ so this tool intentionally stops one step before publishing.
 |---|---|
 | Monday | AI Tools I Actually Use |
 | Wednesday | Interview Debrief |
-| Friday | Win of the Week |
+| Friday | Win of the Week (+ LinkedIn cross-post encouragement) |
 | 1st Monday of month | How AI is Changing Role X (auto-rotates role) |
-| 1st Wednesday of month | Salary Transparency Thread |
+| 1st Wednesday of month | AI Hot Take — Claude searches the web for a current, debate-worthy AI/jobs story and writes a discussion post in a provocative-but-respectful style. Source article link is logged in the **Links** column. |
 | Last day of month | Contributor of the Month (reminder only — you pick the person) |
+
+## Sheet columns
+
+`Date | Post Type | Draft Text | Status | Links`
+
+The **Links** column is only populated for `ai_hot_take` posts (the source
+article Claude based the post on). Worth a quick skim before posting —
+Claude is instructed not to invent facts, but always sanity-check a
+provocative post against its source before publishing.
 
 ## Setup
 

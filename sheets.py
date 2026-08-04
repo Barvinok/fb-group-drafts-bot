@@ -10,7 +10,7 @@ JSON set up for that, you can reuse the same credentials here; just
 share this new Sheet with the same service account email.
 
 Sheet columns expected in row 1 (create these headers once, manually):
-Date | Post Type | Draft Text | Status
+Date | Post Type | Draft Text | Status | Links
 """
 
 import os
@@ -40,12 +40,18 @@ def _get_worksheet():
     try:
         ws = sh.worksheet(WORKSHEET_NAME)
     except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(title=WORKSHEET_NAME, rows=200, cols=4)
-        ws.append_row(["Date", "Post Type", "Draft Text", "Status"])
+        ws = sh.add_worksheet(title=WORKSHEET_NAME, rows=200, cols=5)
+        ws.append_row(["Date", "Post Type", "Draft Text", "Status", "Links"])
 
     return ws
 
 
-def append_draft(date: str, post_type: str, draft_text: str, status: str = "Ready"):
+def append_draft(
+    date: str,
+    post_type: str,
+    draft_text: str,
+    status: str = "Ready",
+    link: str = "",
+):
     ws = _get_worksheet()
-    ws.append_row([date, post_type, draft_text, status])
+    ws.append_row([date, post_type, draft_text, status, link])

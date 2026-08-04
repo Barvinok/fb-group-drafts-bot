@@ -52,7 +52,9 @@ No interview is too small to share — even a "bad" one teaches the group someth
     "win_of_week": """🏆 **Win of the Week**
 Big or small — offer letter, salary bump, finished a certification, survived a tough interview, negotiated something, or just made it through a hard week. Share it here.
 
-This is a no-judgment, no-"humble brag" zone. Celebrate yourself. 🎉""",
+This is a no-judgment, no-"humble brag" zone. Celebrate yourself. 🎉
+
+💡 Bonus: if your win connects to your expertise, consider turning it into a short LinkedIn post or article too — a lesson learned, an AI project you shipped, a skill you leveled up in. It's great visibility, and it helps others in the group learn from you. Drop the link below if you write one — we'll like & share! 🔗""",
 
     "ai_tools": """🛠️ **AI Tools I Actually Use At Work**
 Skip the hype — what do you actually use, and for what?
@@ -72,17 +74,6 @@ Real workflows only — this isn't a tool-recommendation thread. 🙂""",
 - Tools people in this role are using now
 
 If you work as a {role} — jump in the comments and share your real experience. Requests for next role? Drop them below. 👇""",
-
-    "salary_transparency": """💰 **Salary Check: AI-adjacent roles**
-Anonymous & judgment-free. Comment with:
-
-- Role + seniority (junior/mid/senior)
-- Region (country or "remote/US" etc.)
-- Salary range (local currency or EUR/USD)
-- AI-related skills required, if any
-- Company size/type (startup/enterprise/agency)
-
-You can comment as "Anonymous [initials]" if preferred — react ❤️ instead of commenting if you'd rather stay silent but want to see results.""",
 
     "contributor_of_month": """🌟 **Contributor of the Month**
 Reminder for admins: pick this month's contributor and post the shoutout template.
@@ -106,7 +97,7 @@ def decide_post_type(dt: datetime.date) -> str | None:
     if weekday == 0 and dt.day <= 7:
         return "how_ai_changing_role"
     if weekday == 2 and dt.day <= 7:
-        return "salary_transparency"
+        return "ai_hot_take"
     if is_last_day_of_month(dt):
         return "contributor_of_month"
 
@@ -126,6 +117,86 @@ def build_base_text(post_type: str, dt: datetime.date) -> str:
         role = ROLE_ROTATION[month_index(dt, len(ROLE_ROTATION))]
         return TEMPLATES[post_type].format(role=role)
     return TEMPLATES[post_type]
+
+
+# Style reference only — Claude is told to match this tone/structure,
+# not to copy it. It's never sent back verbatim.
+HOT_TAKE_STYLE_EXAMPLE = """AI interview assistants are becoming a hot topic.
+Some tools like ParakeetAI, Final Round AI, LockedIn AI, and Interview Sidekick can listen to interview questions, generate answers in real time, and even use your resume to tailor those answers.
+A friend recently told me his team interviewed a candidate with only 2–3 years of experience. The candidate answered several very niche technical questions that usually require years of hands-on experience. The team was shocked and suspected the candidate was using an AI teleprompter.
+This made me think...
+Where is the line between preparing with AI and cheating?
+Silicon Valley has long had the saying, "Fake it till you make it." Is AI just the next version of that? Personally, I don't like it, but maybe these are the new rules of the game?
+And one more question: If you use AI to get the job, what happens on your first week at work? What do you do when there is no AI answering every question for you?
+I'd love to hear both sides:
+- As an employer, would you hire someone using an AI interview assistant?
+- As a candidate, would you use one? Why or why not?
+- Where do you draw the ethical line?"""
+
+
+def generate_hot_take(client: Anthropic) -> tuple[str, str]:
+    """
+    Searches the web for a genuinely current, debate-worthy AI story
+    (job market, hiring, workplace disruption, ethics — anything that fits
+    "AI is changing everything") and writes a discussion-provoking post in
+    the group's established style. Returns (draft_text, source_url).
+    """
+    prompt = f"""Search the web for one recent (last 2-4 weeks), genuinely
+notable or controversial AI-related story about jobs, hiring, or the
+workplace — something people would want to argue about in the comments.
+Examples of the kind of topic (don't limit yourself to these): AI
+interview-cheating tools, AI replacing entry-level roles, a company's AI
+policy causing backlash, AI-generated work controversies, layoffs blamed
+on AI, etc.
+
+Then write a Facebook post for a private group of women in tech (mostly
+from the former USSR, group language is English). Match this style and
+structure closely (voice, pacing, personal-anecdote framing, ending in
+open discussion questions) — this is a STYLE REFERENCE only, do not reuse
+its specific facts or wording:
+
+---
+{HOT_TAKE_STYLE_EXAMPLE}
+---
+
+Requirements:
+- Base it on what you actually find via search — do not invent facts, tool names, or statistics
+- Paraphrase news content in your own words; do not quote more than a few words from any source
+- Under 200 words
+- End with 2-4 open discussion questions, framed to invite both sides of the debate
+- Tone: thought-provoking and a little provocative, but respectful — not clickbait, not mean
+
+Return ONLY the finished post text, nothing else (no preamble, no "Here's a draft")."""
+
+    resp = client.messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=900,
+        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}],
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    text_parts = []
+    source_url = ""
+
+    for block in resp.content:
+        if block.type == "text":
+            text_parts.append(block.text)
+            for citation in (getattr(block, "citations", None) or []):
+                url = getattr(citation, "url", None)
+                if url and not source_url:
+                    source_url = url
+        elif block.type == "web_search_tool_result" and not source_url:
+            results = block.content if isinstance(block.content, list) else []
+            for item in results:
+                url = getattr(item, "url", None) or (
+                    item.get("url") if isinstance(item, dict) else None
+                )
+                if url:
+                    source_url = url
+                    break
+
+    draft_text = "\n".join(p for p in text_parts if p).strip()
+    return draft_text, source_url
 
 
 def freshen_with_claude(client: Anthropic, post_type: str, base_text: str) -> str:
@@ -166,14 +237,19 @@ def main():
         print(f"{today}: no post scheduled today.")
         return
 
-    base_text = build_base_text(post_type, today)
-    draft_text = freshen_with_claude(client, post_type, base_text)
+    if post_type == "ai_hot_take":
+        draft_text, source_url = generate_hot_take(client)
+    else:
+        base_text = build_base_text(post_type, today)
+        draft_text = freshen_with_claude(client, post_type, base_text)
+        source_url = ""
 
     append_draft(
         date=today.isoformat(),
         post_type=post_type,
         draft_text=draft_text,
         status="Ready",
+        link=source_url,
     )
     print(f"{today}: generated '{post_type}' draft and logged to Sheet.")
 
