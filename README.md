@@ -1,2 +1,57 @@
-# fb-group-drafts-bot
-Since posting itself can't be automated, the highest-value automation is auto-generating the week's draft text so you (or a co-admin) just copy-paste into Facebook's native scheduler
+# FB Group Post Draft Generator
+
+Auto-generates the week's recurring post drafts for your Facebook group and
+logs them to a Google Sheet. You copy-paste the "Ready" drafts into
+Facebook's **native post scheduler** (Group admin tools → create post →
+schedule icon). Facebook does not allow apps to publish to Groups via API,
+so this tool intentionally stops one step before publishing.
+
+## Schedule (default — edit `decide_post_type()` in generate_draft.py to change)
+
+| Day | Post type |
+|---|---|
+| Monday | AI Tools I Actually Use |
+| Wednesday | Interview Debrief |
+| Friday | Win of the Week |
+| 1st Monday of month | How AI is Changing Role X (auto-rotates role) |
+| 1st Wednesday of month | Salary Transparency Thread |
+| Last day of month | Contributor of the Month (reminder only — you pick the person) |
+
+## Setup
+
+1. **Google Sheet**: create a new sheet (or reuse your Instagram one), share
+   it with the same service account email you already use for the
+   Instagram scheduler (`sheets.py` there references `GOOGLE_SHEETS_CREDENTIALS_JSON`).
+   Copy its ID into `SPREADSHEET_ID`.
+2. **GitHub repo**: create a new repo (or a `fb-group-scheduler/` folder in
+   an existing one), add these files, put `daily_draft.yml` under
+   `.github/workflows/`.
+3. **Secrets**: in the repo's Settings → Secrets and variables → Actions,
+   add `ANTHROPIC_API_KEY`, `GOOGLE_SHEETS_CREDENTIALS_JSON`, `SPREADSHEET_ID`.
+4. **Test locally first**:
+   ```bash
+   pip install -r requirements.txt --break-system-packages
+   export ANTHROPIC_API_KEY=...
+   export GOOGLE_SHEETS_CREDENTIALS_JSON='...'
+   export SPREADSHEET_ID=...
+   python generate_draft.py
+   ```
+5. Once it works, let the GitHub Action run daily, or trigger manually via
+   the "Run workflow" button (workflow_dispatch is enabled).
+
+## Weekly routine for you
+
+Open the Sheet once a week (e.g. Sunday night), review the drafts, and
+schedule them in Facebook for the coming week. Takes a few minutes instead
+of writing from scratch.
+
+## Notes
+
+- Bullet points/questions in each template stay fixed on purpose — that
+  consistency is what makes them easy for members to reply to. Only the
+  opening hook line is varied by Claude.
+- "Contributor of the Month" can't be picked by AI — it just drops a
+  reminder row so you don't forget to post the shoutout.
+- If you want a notification (e.g. email) instead of checking the Sheet
+  manually, that can be added later via a simple GitHub Actions step or
+  Zapier watching the Sheet.
